@@ -67,6 +67,15 @@ export default function SnakeGame({ onScoreChange }: SnakeGameProps) {
     onScoreChange(0);
   };
 
+  const changeDirection = useCallback((newDir: Direction) => {
+    if (gameOver || isPaused) return;
+    
+    if (newDir === 'UP' && directionRef.current !== 'DOWN') setDirection('UP');
+    if (newDir === 'DOWN' && directionRef.current !== 'UP') setDirection('DOWN');
+    if (newDir === 'LEFT' && directionRef.current !== 'RIGHT') setDirection('LEFT');
+    if (newDir === 'RIGHT' && directionRef.current !== 'LEFT') setDirection('RIGHT');
+  }, [gameOver, isPaused]);
+
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
@@ -79,22 +88,22 @@ export default function SnakeGame({ onScoreChange }: SnakeGameProps) {
         case 'ArrowUp':
         case 'w':
         case 'W':
-          if (directionRef.current !== 'DOWN') setDirection('UP');
+          changeDirection('UP');
           break;
         case 'ArrowDown':
         case 's':
         case 'S':
-          if (directionRef.current !== 'UP') setDirection('DOWN');
+          changeDirection('DOWN');
           break;
         case 'ArrowLeft':
         case 'a':
         case 'A':
-          if (directionRef.current !== 'RIGHT') setDirection('LEFT');
+          changeDirection('LEFT');
           break;
         case 'ArrowRight':
         case 'd':
         case 'D':
-          if (directionRef.current !== 'LEFT') setDirection('RIGHT');
+          changeDirection('RIGHT');
           break;
         case ' ':
         case 'p':
@@ -103,13 +112,50 @@ export default function SnakeGame({ onScoreChange }: SnakeGameProps) {
           break;
       }
     },
-    [gameOver]
+    [gameOver, changeDirection]
   );
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
+
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartRef.current = {
+      x: e.touches[0].clientX,
+      y: e.touches[0].clientY,
+    };
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStartRef.current) return;
+
+    const touchEndX = e.changedTouches[0].clientX;
+    const touchEndY = e.changedTouches[0].clientY;
+
+    const deltaX = touchEndX - touchStartRef.current.x;
+    const deltaY = touchEndY - touchStartRef.current.y;
+
+    if (Math.abs(deltaX) < 30 && Math.abs(deltaY) < 30) return;
+
+    if (Math.abs(deltaX) > Math.abs(deltaY)) {
+      if (deltaX > 0) {
+        changeDirection('RIGHT');
+      } else {
+        changeDirection('LEFT');
+      }
+    } else {
+      if (deltaY > 0) {
+        changeDirection('DOWN');
+      } else {
+        changeDirection('UP');
+      }
+    }
+
+    touchStartRef.current = null;
+  };
 
   const moveSnake = useCallback(() => {
     if (gameOver || isPaused) return;
@@ -178,72 +224,108 @@ export default function SnakeGame({ onScoreChange }: SnakeGameProps) {
   }, [moveSnake, currentSpeed]);
 
   return (
-    <div className="relative flex flex-col items-center justify-center w-full max-w-md mx-auto aspect-square bg-black border-4 border-fuchsia-500 overflow-hidden box-glitch">
-      {/* Play Area */}
-      <div className="relative w-full h-full bg-black">
-        {/* Grid lines */}
-        <div 
-          className="absolute inset-0 opacity-30"
-          style={{ 
-            backgroundImage: 'linear-gradient(#00FFFF 1px, transparent 1px), linear-gradient(90deg, #00FFFF 1px, transparent 1px)',
-            backgroundSize: `${100 / GRID_SIZE}% ${100 / GRID_SIZE}%`
-          }}
-        />
+    <div className="flex flex-col items-center w-full">
+      <div 
+        className="relative flex flex-col items-center justify-center w-full max-w-md mx-auto aspect-square bg-black border-4 border-fuchsia-500 overflow-hidden box-glitch touch-none"
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
+        {/* Play Area */}
+        <div className="relative w-full h-full bg-black">
+          {/* Grid lines */}
+          <div 
+            className="absolute inset-0 opacity-30"
+            style={{ 
+              backgroundImage: 'linear-gradient(#00FFFF 1px, transparent 1px), linear-gradient(90deg, #00FFFF 1px, transparent 1px)',
+              backgroundSize: `${100 / GRID_SIZE}% ${100 / GRID_SIZE}%`
+            }}
+          />
 
-        {/* Food */}
-        <div
-          className="absolute bg-fuchsia-500 z-0 animate-pulse"
-          style={{
-            left: `${(food.x / GRID_SIZE) * 100}%`,
-            top: `${(food.y / GRID_SIZE) * 100}%`,
-            width: `${100 / GRID_SIZE}%`,
-            height: `${100 / GRID_SIZE}%`,
-            boxShadow: '0 0 10px #FF00FF'
-          }}
-        />
+          {/* Food */}
+          <div
+            className="absolute bg-fuchsia-500 z-0 animate-pulse"
+            style={{
+              left: `${(food.x / GRID_SIZE) * 100}%`,
+              top: `${(food.y / GRID_SIZE) * 100}%`,
+              width: `${100 / GRID_SIZE}%`,
+              height: `${100 / GRID_SIZE}%`,
+              boxShadow: '0 0 10px #FF00FF'
+            }}
+          />
 
-        {/* Snake */}
-        {snake.map((segment, index) => {
-          const isHead = index === 0;
-          return (
-            <div
-              key={index}
-              className={`absolute ${isHead ? 'bg-cyan-400 z-10' : 'bg-cyan-600 z-0'}`}
-              style={{
-                left: `${(segment.x / GRID_SIZE) * 100}%`,
-                top: `${(segment.y / GRID_SIZE) * 100}%`,
-                width: `${100 / GRID_SIZE}%`,
-                height: `${100 / GRID_SIZE}%`,
-                boxShadow: isHead ? '0 0 10px #00FFFF' : 'none',
-                border: '1px solid #000'
-              }}
-            />
-          );
-        })}
+          {/* Snake */}
+          {snake.map((segment, index) => {
+            const isHead = index === 0;
+            return (
+              <div
+                key={index}
+                className={`absolute ${isHead ? 'bg-cyan-400 z-10' : 'bg-cyan-600 z-0'}`}
+                style={{
+                  left: `${(segment.x / GRID_SIZE) * 100}%`,
+                  top: `${(segment.y / GRID_SIZE) * 100}%`,
+                  width: `${100 / GRID_SIZE}%`,
+                  height: `${100 / GRID_SIZE}%`,
+                  boxShadow: isHead ? '0 0 10px #00FFFF' : 'none',
+                  border: '1px solid #000'
+                }}
+              />
+            );
+          })}
+        </div>
+
+        {/* Overlays */}
+        {gameOver && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/90 z-20">
+            <div className="absolute inset-0 scanlines"></div>
+            <h2 className="text-4xl font-pixel text-fuchsia-500 mb-4 text-glitch tracking-widest uppercase">GAME OVER</h2>
+            <p className="text-cyan-400 mb-8 font-terminal text-2xl">FINAL SCORE: {score}</p>
+            <button
+              onClick={resetGame}
+              className="px-6 py-3 bg-black border-2 border-cyan-400 text-cyan-400 font-pixel text-sm hover:bg-cyan-400 hover:text-black transition-colors uppercase tracking-wider box-glitch-reverse relative z-30"
+            >
+              PLAY AGAIN
+            </button>
+          </div>
+        )}
+
+        {isPaused && !gameOver && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/90 z-20">
+            <div className="absolute inset-0 scanlines"></div>
+            <h2 className="text-3xl font-pixel text-cyan-400 text-glitch tracking-widest uppercase">PAUSED</h2>
+            <p className="text-fuchsia-500 mt-4 font-terminal text-xl animate-pulse">PRESS SPACE TO RESUME</p>
+          </div>
+        )}
       </div>
 
-      {/* Overlays */}
-      {gameOver && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/90 z-20">
-          <div className="absolute inset-0 scanlines"></div>
-          <h2 className="text-4xl font-pixel text-fuchsia-500 mb-4 text-glitch tracking-widest uppercase">GAME OVER</h2>
-          <p className="text-cyan-400 mb-8 font-terminal text-2xl">FINAL SCORE: {score}</p>
-          <button
-            onClick={resetGame}
-            className="px-6 py-3 bg-black border-2 border-cyan-400 text-cyan-400 font-pixel text-sm hover:bg-cyan-400 hover:text-black transition-colors uppercase tracking-wider box-glitch-reverse relative z-30"
-          >
-            PLAY AGAIN
-          </button>
-        </div>
-      )}
-
-      {isPaused && !gameOver && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/90 z-20">
-          <div className="absolute inset-0 scanlines"></div>
-          <h2 className="text-3xl font-pixel text-cyan-400 text-glitch tracking-widest uppercase">PAUSED</h2>
-          <p className="text-fuchsia-500 mt-4 font-terminal text-xl animate-pulse">PRESS SPACE TO RESUME</p>
-        </div>
-      )}
+      {/* Mobile Controls */}
+      <div className="mt-8 md:hidden grid grid-cols-3 gap-2 w-48 mx-auto">
+        <div />
+        <button 
+          onClick={() => changeDirection('UP')}
+          className="bg-black border-2 border-cyan-400 text-cyan-400 h-12 flex items-center justify-center active:bg-cyan-400 active:text-black box-glitch transition-colors"
+        >
+          ▲
+        </button>
+        <div />
+        <button 
+          onClick={() => changeDirection('LEFT')}
+          className="bg-black border-2 border-fuchsia-500 text-fuchsia-500 h-12 flex items-center justify-center active:bg-fuchsia-500 active:text-black box-glitch-reverse transition-colors"
+        >
+          ◄
+        </button>
+        <button 
+          onClick={() => changeDirection('DOWN')}
+          className="bg-black border-2 border-cyan-400 text-cyan-400 h-12 flex items-center justify-center active:bg-cyan-400 active:text-black box-glitch transition-colors"
+        >
+          ▼
+        </button>
+        <button 
+          onClick={() => changeDirection('RIGHT')}
+          className="bg-black border-2 border-fuchsia-500 text-fuchsia-500 h-12 flex items-center justify-center active:bg-fuchsia-500 active:text-black box-glitch-reverse transition-colors"
+        >
+          ►
+        </button>
+      </div>
     </div>
   );
 }
